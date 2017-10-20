@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -49,7 +49,7 @@ namespace Moq.Language
 	/// </summary>
 	/// <typeparam name="TProperty">Type of the property.</typeparam>
 	[EditorBrowsable(EditorBrowsableState.Never)]
-	public interface ICallbackSetter<TProperty> : IHideObjectMembers
+	public interface ICallbackSetter<TProperty> : IFluentInterface
 	{ 
 		/// <summary>
 		/// Specifies a callback to invoke when the property is set that receives the 

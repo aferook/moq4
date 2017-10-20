@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -50,7 +50,7 @@ namespace Moq.Language
 	/// <typeparam name="TMock">Mocked type.</typeparam>
 	/// <typeparam name="TResult">Type of the return value from the expression.</typeparam>
 	[EditorBrowsable(EditorBrowsableState.Never)]
-	public partial interface IReturns<TMock, TResult> : IHideObjectMembers
+	public partial interface IReturns<TMock, TResult> : IFluentInterface
 		where TMock : class
 	{
 		/// <summary>

@@ -10,7 +10,7 @@ namespace Moq
 	internal enum InterceptionAction
 	{
  		Continue,
-        Stop
+		Stop
 	}
 
 	internal interface IInterceptStrategy
@@ -82,6 +82,13 @@ namespace Moq
 				}
 			}
 		}
+		internal void ClearEventHandlers()
+		{
+			lock (invocationLists)
+			{
+				invocationLists.Clear();
+			}
+		}
 		#endregion
 		#region ActualInvocations
 		internal void AddInvocation(ICallContext invocation)
@@ -124,6 +131,13 @@ namespace Moq
 				orderedCalls.Remove(call);
 			}
 		}
+		internal void ClearOrderedCalls()
+		{
+			lock (orderedCalls)
+			{
+				orderedCalls.Clear();
+			}
+		}
 		internal IEnumerable<IProxyCall> OrderedCalls
 		{
 			get
@@ -136,10 +150,10 @@ namespace Moq
 		}
 		#endregion
 
-    }
+	}
 	
 	internal class CurrentInterceptContext
-	{        
+	{
 		public IProxyCall Call {get; set; }
 	}
 }

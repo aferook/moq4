@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -39,36 +39,22 @@
 // http://www.opensource.org/licenses/bsd-license.php]
 
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Moq.Proxy;
 using System.Linq.Expressions;
 using Moq.Properties;
+using System.Runtime.ExceptionServices;
 
 namespace Moq
 {
 	internal static class Extensions
 	{
-		static readonly FieldInfo remoteStackTraceString = typeof(Exception).GetField("_remoteStackTraceString",
-										 BindingFlags.Instance | BindingFlags.NonPublic);
-
-		public static TAttribute GetCustomAttribute<TAttribute>(this ICustomAttributeProvider source, bool inherit)
-			where TAttribute : Attribute
-		{
-			object[] attrs = source.GetCustomAttributes(typeof(TAttribute), inherit);
-
-			if (attrs.Length == 0)
-			{
-				return default(TAttribute);
-			}
-			else
-			{
-				return (TAttribute)attrs[0];
-			}
-		}
-
 		public static string Format(this ICallContext invocation)
 		{
 			if (invocation.Method.IsPropertyGetter())
@@ -81,8 +67,12 @@ namespace Moq
 				return invocation.Method.DeclaringType.Name + "." +
 					invocation.Method.Name.Substring(4) + " = " + GetValue(invocation.Arguments.First());
 			}
+			
+			var genericParameters = invocation.Method.IsGenericMethod
+				? "<" + string.Join(", ", invocation.Method.GetGenericArguments().Select(t => t.Name).ToArray()) + ">"
+				: "";
 
-			return invocation.Method.DeclaringType.Name + "." + invocation.Method.Name + "(" +
+			return invocation.Method.DeclaringType.Name + "." + invocation.Method.Name + genericParameters + "(" +
 				string.Join(", ", invocation.Arguments.Select(a => GetValue(a)).ToArray()) + ")";
 		}
 
@@ -98,7 +88,16 @@ namespace Moq
 			{
 				return "\"" + typedValue + "\"";
 			}
-
+			if (value is IEnumerable enumerable && enumerable.GetEnumerator() != null)
+			{                                   // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+				// This second check ensures that we have a usable implementation of IEnumerable.
+				// If value is a mocked object, its IEnumerable implementation might very well
+				// not work correctly.
+				const int maxCount = 10;
+				var objs = enumerable.Cast<object>().Take(maxCount + 1);
+				var more = objs.Count() > maxCount ? ", ..." : string.Empty;
+				return "[" + string.Join(", ", objs.Take(maxCount).Select(GetValue)) + more + "]";
+			}
 			return value.ToString();
 		}
 
@@ -110,31 +109,9 @@ namespace Moq
 			}
 			catch (TargetInvocationException ex)
 			{
-#if SILVERLIGHT
-				/* The test listed below fails when we call the setValue in silverlight...
-				 * 
-				 * 
-				 * Assembly:
-				 *    Moq.Tests.Silverlight.MSTest
-				 * Namespace:
-				 *    Moq.Tests
-				 * Test class:
-				 *    MockedEventsFixture
-				 * Test method:
-				 *    ShouldPreserveStackTraceWhenRaisingEvent
-				 * at System.Reflection.RtFieldInfo.PerformVisibilityCheckOnField(IntPtr field, Object target, IntPtr declaringType, FieldAttributes attr, UInt32 invocationFlags) at System.Reflection.RtFieldInfo.InternalSetValue(Object obj, Object value, BindingFlags invokeAttr, Binder binder, CultureInfo culture, Boolean doVisibilityCheck, Boolean doCheckConsistency) at System.Reflection.RtFieldInfo.InternalSetValue(Object obj, Object value, BindingFlags invokeAttr, Binder binder, CultureInfo culture, Boolean doVisibilityCheck) at System.Reflection.RtFieldInfo.SetValue(Object obj, Object value, BindingFlags invokeAttr, Binder binder, CultureInfo culture) at System.Reflection.FieldInfo.SetValue(Object obj, Object value) at Moq.Extensions.InvokePreserveStack(Delegate del, Object[] args) at Moq.MockedEvent.DoRaise(EventArgs args) at Moq.MockedEvent`1.Raise(TEventArgs args) at Moq.Tests.MockedEventsFixture.<>c__DisplayClass16.<ShouldPreserveStackTraceWhenRaisingEvent>b__14() at Xunit.Record.Exception(ThrowsDelegate code)
-				 */
-#else
-				remoteStackTraceString.SetValue(ex.InnerException, ex.InnerException.StackTrace);
-				ex.InnerException.SetStackTrace(ex.InnerException.StackTrace);
-#endif
-				throw ex.InnerException;
+				ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+				throw;
 			}
-		}
-
-		public static void SetStackTrace(this Exception exception, string stackTrace)
-		{
-			remoteStackTraceString.SetValue(exception, stackTrace);
 		}
 
 		/// <summary>
@@ -142,7 +119,7 @@ namespace Moq
 		/// </summary>
 		public static bool IsDelegate(this Type t)
 		{
-			return t.IsSubclassOf(typeof(Delegate));
+			return t.GetTypeInfo().IsSubclassOf(typeof(Delegate));
 		}
 
 		public static void ThrowIfNotMockeable(this Type typeToMock)
@@ -182,7 +159,7 @@ namespace Moq
 		{
 			// A value type does not match any of these three 
 			// condition and therefore returns false.
-			return typeToMock.IsInterface || typeToMock.IsAbstract || typeToMock.IsDelegate() || (typeToMock.IsClass && !typeToMock.IsSealed);
+			return typeToMock.GetTypeInfo().IsInterface || typeToMock.GetTypeInfo().IsAbstract || typeToMock.IsDelegate() || (typeToMock.GetTypeInfo().IsClass && !typeToMock.GetTypeInfo().IsSealed);
 		}
 
 		public static bool CanOverride(this MethodBase method)
@@ -212,22 +189,25 @@ namespace Moq
 			return false;
 		}
 
-		public static EventInfo GetEvent<TMock>(this Action<TMock> eventExpression, TMock mock)
+		public static MemberInfoWithTarget<EventInfo, Mock> GetEvent<TMock>(this Action<TMock> eventExpression, TMock mock)
 			where TMock : class
 		{
-			Guard.NotNull(() => eventExpression, eventExpression);
+			Guard.NotNull(eventExpression, nameof(eventExpression));
 
-			MethodBase addRemove = null;
+			MethodBase addRemove;
+			Mock target;
+
 			using (var context = new FluentMockContext())
 			{
 				eventExpression(mock);
 
 				if (context.LastInvocation == null)
 				{
-					throw new ArgumentException("Expression is not an event attach or detach, or the event is declared in a class but not marked virtual.");
+					throw new ArgumentException(Resources.ExpressionIsNotEventAttachOrDetachOrIsNotVirtual);
 				}
 
 				addRemove = context.LastInvocation.Invocation.Method;
+				target = context.LastInvocation.Mock;
 			}
 
 			var ev = addRemove.DeclaringType.GetEvent(
@@ -241,12 +221,58 @@ namespace Moq
 					addRemove));
 			}
 
-			return ev;
+			return new MemberInfoWithTarget<EventInfo, Mock>(ev, target);
+		}
+
+#if !NETCORE
+		public static TAttribute GetCustomAttribute<TAttribute>(this ICustomAttributeProvider source, bool inherit)
+			where TAttribute : Attribute
+		{
+			object[] attrs = source.GetCustomAttributes(typeof(TAttribute), inherit);
+
+			if (attrs.Length == 0)
+			{
+				return default(TAttribute);
+			}
+			else
+			{
+				return (TAttribute)attrs[0];
+			}
+		}
+#endif
+
+		public static bool HasCompatibleParameterTypes(this MethodInfo method, Type[] paramTypes, bool exactParameterMatch)
+		{
+			var types = method.GetParameterTypes().ToArray();
+			if (types.Length != paramTypes.Length)
+			{
+				return false;
+			}
+
+			for (int i = 0; i < types.Length; i++)
+			{
+				var parameterType = paramTypes[i];
+				if (parameterType == typeof(object))
+				{
+					continue;
+				}
+				else if (exactParameterMatch && types[i] != parameterType)
+				{
+					return false;
+				}
+				else if (!types[i].IsAssignableFrom(parameterType))
+				{
+					return false;
+				}
+			}
+
+			return true;
 		}
 
 		public static bool HasCompatibleParameterList(this Delegate function, ParameterInfo[] expectedParams)
 		{
-			if (HasCompatibleParameterList(expectedParams, function.Method))
+			var method = function.GetMethodInfo();
+			if (HasCompatibleParameterList(expectedParams, method))
 			{
 				// the backing method for the literal delegate is compatible, DynamicInvoke(...) will succeed
 				return true;
@@ -298,6 +324,64 @@ namespace Moq
 			catch (AmbiguousMatchException)
 			{
 				return null;
+			}
+		}
+
+		public static bool IsExtensionMethod(this MethodInfo method)
+		{
+			return method.IsStatic && method.IsDefined(typeof(ExtensionAttribute));
+			// The above check is perhaps "good enough for now", but admittedly incomplete:
+			// We should also check whether the method is defined in a non-nested static
+			// class, and whether it has at least one parameter.
+		}
+
+		/// <summary>
+		/// Gets all properties of the specified type in depth-first order.
+		/// That is, properties of the furthest ancestors are returned first,
+		/// and the type's own properties are returned last.
+		/// </summary>
+		/// <param name="type">The type whose properties are to be returned.</param>
+		internal static List<PropertyInfo> GetAllPropertiesInDepthFirstOrder(this Type type)
+		{
+			var properties = new List<PropertyInfo>();
+			var none = new HashSet<Type>();
+
+			type.AddPropertiesInDepthFirstOrderTo(properties, typesAlreadyVisited: none);
+
+			return properties;
+		}
+
+		/// <summary>
+		/// This is a helper method supporting <see cref="GetAllPropertiesInDepthFirstOrder(Type)"/>
+		/// and is not supposed to be called directly.
+		/// </summary>
+		private static void AddPropertiesInDepthFirstOrderTo(this Type type, List<PropertyInfo> properties, HashSet<Type> typesAlreadyVisited)
+		{
+			if (!typesAlreadyVisited.Contains(type))
+			{
+				// make sure we do not process properties of the current type twice:
+				typesAlreadyVisited.Add(type);
+
+				//// follow down axis 1: add properties of base class. note that this is currently
+				//// disabled, since it wasn't done previously and this can only result in changed
+				//// behavior.
+				//if (type.GetTypeInfo().BaseType != null)
+				//{
+				//	type.GetTypeInfo().BaseType.AddPropertiesInDepthFirstOrderTo(properties, typesAlreadyVisited);
+				//}
+
+				// follow down axis 2: add properties of inherited / implemented interfaces:
+				var superInterfaceTypes = type.GetInterfaces();
+				foreach (var superInterfaceType in superInterfaceTypes)
+				{
+					superInterfaceType.AddPropertiesInDepthFirstOrderTo(properties, typesAlreadyVisited);
+				}
+
+				// add own properties:
+				foreach (var property in type.GetProperties())
+				{
+					properties.Add(property);
+				}
 			}
 		}
 	}

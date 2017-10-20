@@ -1,5 +1,6 @@
 ﻿using System;
 using System.ComponentModel;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using Xunit;
 
@@ -35,8 +36,7 @@ namespace Moq.Tests
 
 			Assert.False(presenter.Canceled);
 
-			view.Raise(v => v.Canceled += null, EventArgs.Empty);
-
+			view.Raise(v => v.Canceled += null, EventArgs.Empty);         
 			Assert.True(presenter.Canceled);
 		}
 
@@ -182,6 +182,7 @@ namespace Moq.Tests
 		}
 
 		[Fact]
+		[SuppressMessage("Assertions", "xUnit2004")]
 		public void ShouldRaiseEventWithFuncThreeArgs()
 		{
 			var mock = new Mock<IAdder<string>>();
@@ -206,6 +207,7 @@ namespace Moq.Tests
 		}
 
 		[Fact]
+		[SuppressMessage("Assertions", "xUnit2004")]
 		public void ShouldRaiseEventWithFuncFourArgs()
 		{
 			var mock = new Mock<IAdder<string>>();
@@ -342,7 +344,7 @@ namespace Moq.Tests
 		}
 
 		[Fact]
-		public void DoesNotRaiseEventOnSubObject()
+		public void CanRaiseEventOnSubObject()
 		{
 			var mock = new Mock<IParent> { DefaultValue = DefaultValue.Mock };
 
@@ -353,7 +355,7 @@ namespace Moq.Tests
 
 			mock.Raise(p => p.Adder.Added += null, EventArgs.Empty);
 
-			Assert.False(raised);
+			Assert.True(raised);
 		}
 
 		[Fact]
@@ -395,19 +397,19 @@ namespace Moq.Tests
 				() => mock.SetupSet(m => m.Value = It.IsAny<int>()).Raises(m => m.ClassEvent += null, EventArgs.Empty));
 		}
 
-		[Fact(Skip = "Events on non-virtual events not supported yet")]
-		public void EventRaisingFailsOnNonVirtualEvent()
-		{
-			var mock = new Mock<WithEvent>();
-
-			var raised = false;
-			mock.Object.ClassEvent += delegate { raised = true; };
-
-			// TODO: fix!!! We should go the GetInvocationList route here...
-			mock.Raise(x => x.ClassEvent += null, EventArgs.Empty);
-
-			Assert.True(raised);
-		}
+		//[Fact(Skip = "Events on non-virtual events not supported yet")]
+		//public void EventRaisingFailsOnNonVirtualEvent()
+		//{
+		//	var mock = new Mock<WithEvent>();
+		//
+		//	var raised = false;
+		//	mock.Object.ClassEvent += delegate { raised = true; };
+		//
+		//	// TODO: fix!!! We should go the GetInvocationList route here...
+		//	mock.Raise(x => x.ClassEvent += null, EventArgs.Empty);
+		//
+		//	Assert.True(raised);
+		//}
 
 		[Fact]
 		public void EventRaisingSucceedsOnVirtualEvent()
@@ -595,7 +597,7 @@ namespace Moq.Tests
 			var mock = new Mock<FordawrdEventDoProtectedImplementation>();
 			INotifyPropertyChanged observable = mock.Object;
 			
-			Assert.DoesNotThrow(() => observable.PropertyChanged += (sender, args) => { });
+			observable.PropertyChanged += (sender, args) => { };
 		}
 
 		public delegate void CustomEvent(string message, int value);
@@ -705,6 +707,5 @@ namespace Moq.Tests
 				}
 			}
 		}
-
 	}
 }

@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -46,7 +46,7 @@ namespace Moq.Language.Flow
 	/// Implements the fluent API.
 	/// </summary>
 	[EditorBrowsable(EditorBrowsableState.Never)]
-	public interface IReturnsThrows<TMock, TResult> : IReturns<TMock, TResult>, IThrows, IHideObjectMembers
+	public interface IReturnsThrows<TMock, TResult> : IReturns<TMock, TResult>, IThrows, IFluentInterface
 		where TMock : class
 	{
 	}
@@ -55,7 +55,7 @@ namespace Moq.Language.Flow
 	/// Implements the fluent API.
 	/// </summary>
 	[EditorBrowsable(EditorBrowsableState.Never)]
-	public interface IReturnsThrowsGetter<TMock, TProperty> : IReturnsGetter<TMock, TProperty>, IThrows, IHideObjectMembers
+	public interface IReturnsThrowsGetter<TMock, TProperty> : IReturnsGetter<TMock, TProperty>, IThrows, IFluentInterface
 		where TMock : class
 	{
 	}

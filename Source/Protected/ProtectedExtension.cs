@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -57,7 +57,7 @@ namespace Moq.Protected
 		public static IProtectedMock<T> Protected<T>(this Mock<T> mock)
 			where T : class
 		{
-			Guard.NotNull(() => mock, mock);
+			Guard.NotNull(mock, nameof(mock));
 
 			return new ProtectedMock<T>(mock);
 		}

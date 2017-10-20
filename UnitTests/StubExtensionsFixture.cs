@@ -36,15 +36,15 @@ namespace Moq.Tests
 		[Fact]
 		public void StubsAllProperties()
 		{
-			var mock = new Mock<IFoo>(MockBehavior.Strict);
+			var mock = new Mock<IFoo>();
 
 			mock.SetupAllProperties();
 
 			// Verify defaults
 			Assert.Equal(default(int), mock.Object.ValueProperty);
-			Assert.Equal(null, mock.Object.Object);
-			Assert.Equal(null, mock.Object.Bar);
-			Assert.Equal(null, mock.Object.GetOnly);
+			Assert.Null(mock.Object.Object);
+			Assert.Null(mock.Object.Bar);
+			Assert.Null(mock.Object.GetOnly);
 
 			mock.Object.ValueProperty = 5;
 			Assert.Equal(5, mock.Object.ValueProperty);
@@ -56,6 +56,16 @@ namespace Moq.Tests
 			var bar = new Mock<IBar>();
 			mock.Object.Bar = bar.Object;
 			Assert.Same(bar.Object, mock.Object.Bar);
+		}
+
+		[Fact]
+		public void StubsAllCyrcularDependency()
+		{
+			var mock = new Mock<IHierarchy>();
+
+			mock.SetupAllProperties();
+
+			Assert.Null(mock.Object.Hierarchy);
 		}
 
 		[Fact]
@@ -126,6 +136,11 @@ namespace Moq.Tests
 		public interface IBaz : IBar
 		{
 			string Name { get; set; }
+		}
+
+		public interface IHierarchy
+		{
+			IHierarchy Hierarchy { get; set; }
 		}
 	}
 }

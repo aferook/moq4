@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -46,8 +46,9 @@ using Moq.Language.Flow;
 using Moq.Proxy;
 using Moq.Language;
 using System.Reflection;
+using System.Threading;
 
-#if !SILVERLIGHT
+#if FEATURE_CODEDOM
 using System.CodeDom;
 using Microsoft.CSharp;
 #endif
@@ -57,11 +58,11 @@ namespace Moq
 	/// <include file='Mock.Generic.xdoc' path='docs/doc[@for="Mock{T}"]/*'/>
     public partial class Mock<T> : Mock, IMock<T> where T : class
 	{
-		private static IProxyFactory proxyFactory = new CastleProxyFactory();
+		private static int serialNumberCounter = 0;
 		private T instance;
 		private object[] constructorArguments;
 
-		#region Ctors
+#region Ctors
 
 		/// <summary>
 		/// Ctor invoked by AsTInterface exclusively.
@@ -84,8 +85,10 @@ namespace Moq
 		{
 		}
 
+#pragma warning disable CS1735 // XML comment has a typeparamref tag, but there is no type parameter by that name
 		/// <include file='Mock.Generic.xdoc' path='docs/doc[@for="Mock{T}.ctor(object[])"]/*'/>
 		[SuppressMessage("Microsoft.Usage", "CA2214:DoNotCallOverridableMethodsInConstructors")]
+#pragma warning restore CS1735 // XML comment has a typeparamref tag, but there is no type parameter by that name
 		public Mock(params object[] args)
 			: this(MockBehavior.Default, args)
 		{
@@ -112,19 +115,20 @@ namespace Moq
 			this.Behavior = behavior;
 			this.Interceptor = new Interceptor(behavior, typeof(T), this);
 			this.constructorArguments = args;
-			this.ImplementedInterfaces.AddRange(typeof(T).GetInterfaces().Where(i => (i.IsPublic || i.IsNestedPublic) && !i.IsImport));
+			this.ImplementedInterfaces.AddRange(typeof(T).GetInterfaces().Where(i => (i.GetTypeInfo().IsPublic || i.GetTypeInfo().IsNestedPublic) && !i.GetTypeInfo().IsImport));
 			this.ImplementedInterfaces.Add(typeof(IMocked<T>));
+			this.InternallyImplementedInterfaceCount = this.ImplementedInterfaces.Count;
 
 			this.CheckParameters();
 		}
 
 		private string GenerateMockName()
 		{
-			var randomId = Guid.NewGuid().ToString("N").Substring(0, 4);
+			var serialNumber = Interlocked.Increment(ref serialNumberCounter).ToString("x8");
 
 			var typeName = typeof (T).FullName;
 
-#if !SILVERLIGHT
+#if FEATURE_CODEDOM
 			if (typeof (T).IsGenericType)
 			{
 				using (var provider = new CSharpCodeProvider())
@@ -135,7 +139,7 @@ namespace Moq
 			}
 #endif
 
-			return "Mock<" + typeName + ":" + randomId + ">";
+			return "Mock<" + typeName + ":" + serialNumber + ">";
 		}
 
 		private void CheckParameters()
@@ -144,7 +148,7 @@ namespace Moq
 
 			if (this.constructorArguments.Length > 0)
 			{
-				if (typeof(T).IsInterface)
+				if (typeof(T).GetTypeInfo().IsInterface)
 				{
 					throw new ArgumentException(Properties.Resources.ConstructorArgsForInterface);
 				}
@@ -155,9 +159,9 @@ namespace Moq
 			}
 		}
 
-		#endregion
+#endregion
 
-		#region Properties
+#region Properties
 
 		/// <include file='Mock.Generic.xdoc' path='docs/doc[@for="Mock{T}.Object"]/*'/>
 		[SuppressMessage("Microsoft.Naming", "CA1716:IdentifiersShouldNotMatchKeywords", MessageId = "Object", Justification = "Exposes the mocked object instance, so it's appropriate.")]
@@ -190,10 +194,10 @@ namespace Moq
 					// We're mocking a delegate.
 					// Firstly, get/create an interface with a method whose signature
 					// matches that of the delegate.
-					var delegateInterfaceType = proxyFactory.GetDelegateProxyInterface(typeof(T), out delegateInterfaceMethod);
+					var delegateInterfaceType = Mock.ProxyFactory.GetDelegateProxyInterface(typeof(T), out delegateInterfaceMethod);
 
 					// Then create a proxy for that.
-					var delegateProxy = proxyFactory.CreateProxy(
+					var delegateProxy = Mock.ProxyFactory.CreateProxy(
 						delegateInterfaceType,
 						this.Interceptor,
 						this.ImplementedInterfaces.ToArray(),
@@ -201,14 +205,14 @@ namespace Moq
 
 					// Then our instance is a delegate of the desired type, pointing at the
 					// appropriate method on that proxied interface instance.
-					this.instance = (T)(object)Delegate.CreateDelegate(typeof(T), delegateProxy, delegateInterfaceMethod);
+					this.instance = (T)(object)delegateInterfaceMethod.CreateDelegate(typeof(T), delegateProxy);
 				}
 				else
 				{
-					this.instance = (T)proxyFactory.CreateProxy(
+					this.instance = (T)Mock.ProxyFactory.CreateProxy(
 						typeof(T),
 						this.Interceptor,
-						this.ImplementedInterfaces.ToArray(),
+						this.ImplementedInterfaces.Skip(this.InternallyImplementedInterfaceCount - 1).ToArray(),
 						this.constructorArguments);
 				}
 			});
@@ -248,9 +252,9 @@ namespace Moq
 			get { return typeof(T); }
 		}
 
-		#endregion
+#endregion
 
-		#region Setup
+#region Setup
 
 		/// <include file='Mock.Generic.xdoc' path='docs/doc[@for="Mock{T}.Setup"]/*'/>
 		[SuppressMessage("Microsoft.Design", "CA1006:DoNotNestGenericTypesInMemberSignatures", Justification = "By design")]
@@ -311,9 +315,9 @@ namespace Moq
 			return this;
 		}
 
-		#endregion
+#endregion
 
-		#region When
+#region When
 
 		/// <include file='Mock.Generic.xdoc' path='docs/doc[@for="Mock{T}.When"]/*'/>
 		public ISetupConditionResult<T> When(Func<bool> condition)
@@ -326,9 +330,9 @@ namespace Moq
 			return new ConditionalContext<T>(this, condition);
 		}
 
-		#endregion
+#endregion
 
-		#region Verify
+#region Verify
 
 		/// <include file='Mock.Generic.xdoc' path='docs/doc[@for="Mock{T}.Verify(expression)"]/*'/>
 		[SuppressMessage("Microsoft.Design", "CA1006:DoNotNestGenericTypesInMemberSignatures", Justification = "By design")]
@@ -485,9 +489,9 @@ namespace Moq
 			Mock.VerifySet(this, setterExpression, times(), failMessage);
 		}
 
-		#endregion
+#endregion
 
-		#region Raise
+#region Raise
 
 		/// <include file='Mock.Generic.xdoc' path='docs/doc[@for="Mock{T}.Raise"]/*'/>
 		[SuppressMessage("Microsoft.Design", "CA1030:UseEventsWhereAppropriate", Justification = "Raises the event, rather than being one.")]
@@ -498,7 +502,7 @@ namespace Moq
 
 			try
 			{
-				this.DoRaise(ev, args);
+				ev.Target.DoRaise(ev.MemberInfo, args);
 			}
 			catch (Exception e)
 			{
@@ -516,7 +520,7 @@ namespace Moq
 
 			try
 			{
-				this.DoRaise(ev, args);
+				ev.Target.DoRaise(ev.MemberInfo, args);
 			}
 			catch (Exception e)
 			{
@@ -525,19 +529,6 @@ namespace Moq
 			}
 		}
 
-		#endregion
-
-		// NOTE: known issue. See https://connect.microsoft.com/VisualStudio/feedback/ViewFeedback.aspx?FeedbackID=318122
-		//public static implicit operator TInterface(Mock<T> mock)
-		//{
-		//    // TODO: doesn't work as expected but ONLY with interfaces :S
-		//    return mock.Object;
-		//}
-
-		//public static explicit operator TInterface(Mock<T> mock)
-		//{
-		//    // TODO: doesn't work as expected but ONLY with interfaces :S
-		//    throw new NotImplementedException();
-		//}
+#endregion
 	}
 }

@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -46,7 +46,7 @@ namespace Moq.Language
 	/// Defines the <c>Raises</c> verb.
 	/// </summary>
 	[EditorBrowsable(EditorBrowsableState.Never)]
-	public partial interface IRaise<T> : IHideObjectMembers
+	public partial interface IRaise<T> : IFluentInterface
 	{
 		/// <summary>
 		/// Specifies the event that will be raised 

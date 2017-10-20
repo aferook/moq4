@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -49,7 +49,7 @@ namespace Moq.Language
 	/// Defines the <c>Throws</c> verb.
 	/// </summary>
 	[EditorBrowsable(EditorBrowsableState.Never)]
-	public interface IThrows : IHideObjectMembers
+	public interface IThrows : IFluentInterface
 	{
 		/// <summary>
 		/// Specifies the exception to throw when the method is invoked.

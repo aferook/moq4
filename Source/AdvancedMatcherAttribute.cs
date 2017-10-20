@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -48,8 +48,8 @@ namespace Moq
 	{
 		public AdvancedMatcherAttribute(Type matcherType)
 		{
-			Guard.NotNull(() => matcherType, matcherType);
-			Guard.CanBeAssigned(() => matcherType, matcherType, typeof(IMatcher));
+			Guard.NotNull(matcherType, nameof(matcherType));
+			Guard.CanBeAssigned(matcherType, typeof(IMatcher), nameof(matcherType));
 
 			this.MatcherType = matcherType;
 		}

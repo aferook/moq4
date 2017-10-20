@@ -1,6 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+#if NETCORE
+using System.Reflection;
+#endif
 using Xunit;
 
 namespace Moq.Tests
@@ -44,7 +47,7 @@ namespace Moq.Tests
 			Assert.Contains("mock", mock.ToString().ToLower());
 		}
 
-#if !SILVERLIGHT
+#if FEATURE_CODEDOM
 		[Fact]
 		public void HasADefaultNameThatIncludesItsGenericParameters()
 		{
@@ -72,7 +75,8 @@ namespace Moq.Tests
 
 		public class ToStringOverrider
 		{
-			public override string ToString() {
+			public override string ToString()
+			{
 				return "real value";
 			}
 		}
@@ -231,7 +235,7 @@ namespace Moq.Tests
 			Assert.False(String.IsNullOrEmpty(mock.Object.ToString()));
 		}
 
-		[Fact(Skip = "Castle.DynamicProxy2 doesn't seem to call interceptors for ToString, GetHashCode & Equals")]
+		[Fact]
 		public void OverridesObjectMethods()
 		{
 			var mock = new Mock<IFoo>();
@@ -254,6 +258,62 @@ namespace Moq.Tests
 
 			Assert.False(mock.Object.Check("foo"));
 			Assert.True(mock.Object.Check("bar"));
+		}
+
+		[Fact]
+		public void CanSetupToString()
+		{
+			var mock = new Mock<Foo>();
+			mock.Setup(x => x.ToString()).Returns("This is me");
+
+			Assert.Equal("This is me", mock.Object.ToString());
+		}
+
+		[Fact]
+		public void CanSetupToStringForInterface()
+		{
+			var mock = new Mock<IFoo>();
+			mock.Setup(x => x.ToString()).Returns("This is me");
+
+			Assert.Equal("This is me", mock.Object.ToString());
+		}
+
+		[Fact]
+		public void CanSetupGetHashCode()
+		{
+			var mock = new Mock<Foo>();
+			mock.Setup(x => x.GetHashCode()).Returns(527);
+
+			Assert.Equal(527, mock.Object.GetHashCode());
+		}
+
+		[Fact]
+		public void CanSetupGetHashCodeForInterface()
+		{
+			var mock = new Mock<IFoo>();
+			mock.Setup(x => x.GetHashCode()).Returns(527);
+
+			Assert.Equal(527, mock.Object.GetHashCode());
+		}
+
+		[Fact]
+		public void CanSetupObjectEquals()
+		{
+			var mock = new Mock<Foo>();
+			mock.Setup(x => x.Equals(It.IsAny<object>())).Returns<object>((obj) => false);
+			var foo = mock.Object;
+
+			Assert.True(!foo.Equals(foo));
+		}
+
+		[Fact]
+		public void CanSetupObjectEqualsForInterface()
+		{
+			var mock = new Mock<IFoo>();
+			mock.Setup(x => x.Equals(It.IsAny<object>())).Returns<object>((obj) => false);
+			var foo = mock.Object;
+
+			Assert.True(!foo.Equals(foo));
 		}
 
 		[Fact]
@@ -309,7 +369,7 @@ namespace Moq.Tests
 			// Should also construct without args.
 			mock = new Mock<FooWithConstructors>(MockBehavior.Default);
 
-			Assert.Equal(null, mock.Object.StringValue);
+			Assert.Null(mock.Object.StringValue);
 			Assert.Equal(0, mock.Object.IntValue);
 		}
 
@@ -327,21 +387,21 @@ namespace Moq.Tests
 		{
 			var mock = new Mock<ClassWithNoDefaultConstructor>(MockBehavior.Default, null, 26);
 
-			Assert.Equal(null, mock.Object.StringValue);
+			Assert.Null(mock.Object.StringValue);
 			Assert.Equal(26, mock.Object.IntValue);
 		}
 
 		[Fact]
 		public void ThrowsIfNoMatchingConstructorFound()
 		{
-            try
-            {
-                Console.WriteLine(new Mock<ClassWithNoDefaultConstructor>(25, true).Object);
-                Assert.True(false, "Should have thrown an exception since constructor does not exist.");
-            }
-            catch (Exception)
-            {
-            }
+			try
+			{
+				Console.WriteLine(new Mock<ClassWithNoDefaultConstructor>(25, true).Object);
+				Assert.True(false, "Should have thrown an exception since constructor does not exist.");
+			}
+			catch (Exception)
+			{
+			}
 		}
 
 		[Fact]
@@ -803,7 +863,7 @@ namespace Moq.Tests
 			target.Setup(x => x.ExecuteArray(new string[] { argument, It.IsAny<string>() })).Returns(expected);
 
 			string ret = target.Object.ExecuteArray(new string[] { argument, "baz" });
-			Assert.Equal(null, ret);
+			Assert.Null(ret);
 		}
 
 		[Fact]
@@ -1023,6 +1083,47 @@ namespace Moq.Tests
 
 		public interface INewBar : IBar
 		{
+		}
+
+		// Note that this test requires that there be no [assembly: InternalsVisibleTo("DynamicProxyGenAssembly2")]
+		// or similar defined in this test assembly. If some other test requires that internals be made
+		// visible to DynamicProxy, then this test must be disabled.
+		[Fact]
+		public void SetupOnInaccessibleMethodThrowsException()
+		{
+			var mock = new Mock<Accessibility.ClassWithAccessibleAndInaccessibleMethod>();
+
+			var error = Record.Exception(() =>
+			{
+				mock.Setup(m => m.Internal());
+			});
+
+			Assert.NotNull(error);
+			Assert.IsType<ArgumentException>(error);
+			Assert.Contains("accessible", error.Message);
+			Assert.Contains("proxy generator", error.Message);
+		}
+
+		[Fact]
+		public void SetupOnAccessibleMethodDoesNotThrowException()
+		{
+			var mock = new Mock<Accessibility.ClassWithAccessibleAndInaccessibleMethod>();
+
+			var error = Record.Exception(() =>
+			{
+				mock.Setup(m => m.Public());
+			});
+
+			Assert.Null(error);
+		}
+
+		public class Accessibility
+		{
+			public class ClassWithAccessibleAndInaccessibleMethod
+			{
+				public virtual void Public() => throw new InvalidOperationException("Public");
+				internal virtual void Internal() => throw new InvalidOperationException("Internal");
+			}
 		}
 	}
 }

@@ -37,8 +37,8 @@ namespace Moq
 			var expectationPosition = sequenceLength++;
 
 			return mock.When(new Condition(
-			   condition: () => expectationPosition == sequenceStep,
-			   success: NextStep));
+				condition: () => expectationPosition == sequenceStep,
+				success: NextStep));
 		}
 	}
 
@@ -55,7 +55,7 @@ namespace Moq
 			MockSequence sequence)
 			where TMock : class
 		{
-			Guard.NotNull(() => sequence, sequence);
+			Guard.NotNull(sequence, nameof(sequence));
 
 			return sequence.For(mock);
 		}

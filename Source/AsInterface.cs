@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -39,6 +39,7 @@
 // http://www.opensource.org/licenses/bsd-license.php]
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Reflection;
 
@@ -55,7 +56,7 @@ namespace Moq
 			this.owner = owner;
 		}
 
-		internal override Dictionary<MethodInfo, Mock> InnerMocks
+		internal override ConcurrentDictionary<MethodInfo, Mock> InnerMocks
 		{
 			get { return this.owner.InnerMocks; }
 		}
@@ -97,6 +98,11 @@ namespace Moq
 		public override Mock<TNewInterface> As<TNewInterface>()
 		{
 			return this.owner.As<TNewInterface>();
+		}
+
+		protected override object OnGetObject()
+		{
+			return this.owner.Object;
 		}
 	}
 }

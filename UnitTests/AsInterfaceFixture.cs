@@ -157,7 +157,7 @@ namespace Moq.Tests
 		{
 			var fooBar = new Mock<FooBar>();
 			var obj = fooBar.Object;
-			Assert.DoesNotThrow(() => fooBar.As<IFoo>());
+			fooBar.As<IFoo>();
 		}
 
 		[Fact]
@@ -166,8 +166,10 @@ namespace Moq.Tests
 			var fooBar = new Mock<FooBar>();
 			fooBar.CallBase = true;
 			var bag = (IBag)fooBar.Object;
-			Assert.DoesNotThrow(() => bag.Get("test"));
+			bag.Get("test");
 		}
+
+		// see also test fixture `Issue458` in `IssueReportsFixture`
 
 		public interface IFoo
 		{

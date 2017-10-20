@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -62,13 +62,17 @@ namespace Moq
 			var value = base.ProvideDefault(member);
 
 			Mock mock = null;
-			if (value == null && member.ReturnType.IsMockeable() && !owner.InnerMocks.TryGetValue(member, out mock))
+			if (value == null && member.ReturnType.IsMockeable())
 			{
-				var mockType = typeof(Mock<>).MakeGenericType(member.ReturnType);
-				mock = (Mock)Activator.CreateInstance(mockType, owner.Behavior);
-				mock.DefaultValue = owner.DefaultValue;
-				mock.CallBase = owner.CallBase;
-				owner.InnerMocks.Add(member, mock);
+				mock = owner.InnerMocks.GetOrAdd(member, info =>
+				{
+					// Create a new mock to be placed to InnerMocks dictionary if it's missing there
+					var mockType = typeof(Mock<>).MakeGenericType(info.ReturnType);
+					Mock newMock = (Mock)Activator.CreateInstance(mockType, owner.Behavior);
+					newMock.DefaultValue = owner.DefaultValue;
+					newMock.CallBase = owner.CallBase;
+					return newMock;
+				});
 			}
 
 			return mock != null ? mock.Object : value;

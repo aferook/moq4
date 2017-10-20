@@ -1,5 +1,5 @@
 //Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -43,6 +43,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq.Expressions;
 using Moq.Properties;
+using System.Reflection;
 
 namespace Moq
 {
@@ -53,11 +54,11 @@ namespace Moq
 		/// Ensures the given <paramref name="value"/> is not null.
 		/// Throws <see cref="ArgumentNullException"/> otherwise.
 		/// </summary>
-		public static void NotNull<T>(Expression<Func<T>> reference, T value)
+		public static void NotNull(object value, string paramName)
 		{
 			if (value == null)
 			{
-				throw new ArgumentNullException(GetParameterName(reference));
+				throw new ArgumentNullException(paramName);
 			}
 		}
 
@@ -66,12 +67,16 @@ namespace Moq
 		/// Throws <see cref="ArgumentNullException"/> in the first case, or 
 		/// <see cref="ArgumentException"/> in the latter.
 		/// </summary>
-		public static void NotNullOrEmpty(Expression<Func<string>> reference, string value)
+		public static void NotNullOrEmpty(string value, string paramName)
 		{
-			NotNull<string>(reference, value);
+			if (value == null)
+			{
+				throw new ArgumentNullException(paramName);
+			}
+
 			if (value.Length == 0)
 			{
-				throw new ArgumentException(Resources.ArgumentCannotBeEmpty, GetParameterName(reference));
+				throw new ArgumentException(Resources.ArgumentCannotBeEmpty, paramName);
 			}
 		}
 
@@ -80,16 +85,16 @@ namespace Moq
 		/// </summary>
 		/// <typeparam name="T">Type of the argument to check, it must be an <see cref="IComparable"/> type.
 		/// </typeparam>
-		/// <param name="reference">The expression containing the name of the argument.</param>
 		/// <param name="value">The argument value to check.</param>
 		/// <param name="from">The minimun allowed value for the argument.</param>
 		/// <param name="to">The maximun allowed value for the argument.</param>
-		public static void NotOutOfRangeInclusive<T>(Expression<Func<T>> reference, T value, T from, T to)
+		/// <param name="paramName">The name of the parameter.</param>
+		public static void NotOutOfRangeInclusive<T>(T value, T from, T to, string paramName)
 				where T : IComparable
 		{
 			if (value != null && (value.CompareTo(from) < 0 || value.CompareTo(to) > 0))
 			{
-				throw new ArgumentOutOfRangeException(GetParameterName(reference));
+				throw new ArgumentOutOfRangeException(paramName);
 			}
 		}
 
@@ -98,44 +103,38 @@ namespace Moq
 		/// </summary>
 		/// <typeparam name="T">Type of the argument to check, it must be an <see cref="IComparable"/> type.
 		/// </typeparam>
-		/// <param name="reference">The expression containing the name of the argument.</param>
 		/// <param name="value">The argument value to check.</param>
 		/// <param name="from">The minimun allowed value for the argument.</param>
 		/// <param name="to">The maximun allowed value for the argument.</param>
-		public static void NotOutOfRangeExclusive<T>(Expression<Func<T>> reference, T value, T from, T to)
+		/// <param name="paramName">The name of the parameter.</param>
+		public static void NotOutOfRangeExclusive<T>(T value, T from, T to, string paramName)
 				where T : IComparable
 		{
 			if (value != null && (value.CompareTo(from) <= 0 || value.CompareTo(to) >= 0))
 			{
-				throw new ArgumentOutOfRangeException(GetParameterName(reference));
+				throw new ArgumentOutOfRangeException(paramName);
 			}
 		}
 
-		public static void CanBeAssigned(Expression<Func<object>> reference, Type typeToAssign, Type targetType)
+		public static void CanBeAssigned(Type typeToAssign, Type targetType, string paramName)
 		{
 			if (!targetType.IsAssignableFrom(typeToAssign))
 			{
-				if (targetType.IsInterface)
+				if (targetType.GetTypeInfo().IsInterface)
 				{
 					throw new ArgumentException(string.Format(
 						CultureInfo.CurrentCulture,
 						Resources.TypeNotImplementInterface,
 						typeToAssign,
-						targetType), GetParameterName(reference));
+						targetType), paramName);
 				}
 
 				throw new ArgumentException(string.Format(
 					CultureInfo.CurrentCulture,
 					Resources.TypeNotInheritFromType,
 					typeToAssign,
-					targetType), GetParameterName(reference));
+					targetType), paramName);
 			}
-		}
-
-		private static string GetParameterName(LambdaExpression reference)
-		{
-			var member = (MemberExpression)reference.Body;
-			return member.Member.Name;
 		}
 	}
 }

@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -46,7 +46,7 @@ namespace Moq.Language.Flow
 	/// Implements the fluent API.
 	/// </summary>
 	[EditorBrowsable(EditorBrowsableState.Never)]
-	public interface ISetup<TMock> : ICallback, ICallbackResult, IRaise<TMock>, IVerifies, IHideObjectMembers
+	public interface ISetup<TMock> : ICallback, ICallbackResult, IRaise<TMock>, IVerifies, IFluentInterface
 		where TMock : class
 	{
 	}
@@ -55,7 +55,7 @@ namespace Moq.Language.Flow
 	/// Implements the fluent API.
 	/// </summary>
 	[EditorBrowsable(EditorBrowsableState.Never)]
-	public interface ISetup<TMock, TResult> : ICallback<TMock, TResult>, IReturnsThrows<TMock, TResult>, IVerifies, IHideObjectMembers
+	public interface ISetup<TMock, TResult> : ICallback<TMock, TResult>, IReturnsThrows<TMock, TResult>, IVerifies, IFluentInterface
 		where TMock : class
 	{
 	}
@@ -64,7 +64,7 @@ namespace Moq.Language.Flow
 	/// Implements the fluent API.
 	/// </summary>
 	[EditorBrowsable(EditorBrowsableState.Never)]
-	public interface ISetupGetter<TMock, TProperty> : ICallbackGetter<TMock, TProperty>, IReturnsThrowsGetter<TMock, TProperty>, IVerifies, IHideObjectMembers
+	public interface ISetupGetter<TMock, TProperty> : ICallbackGetter<TMock, TProperty>, IReturnsThrowsGetter<TMock, TProperty>, IVerifies, IFluentInterface
 		where TMock : class
 	{
 	}
@@ -73,7 +73,7 @@ namespace Moq.Language.Flow
 	/// Implements the fluent API.
 	/// </summary>
 	[EditorBrowsable(EditorBrowsableState.Never)]
-	public interface ISetupSetter<TMock, TProperty> : ICallbackSetter<TProperty>, ICallbackResult, IRaise<TMock>, IVerifies, IHideObjectMembers
+	public interface ISetupSetter<TMock, TProperty> : ICallbackSetter<TProperty>, ICallbackResult, IRaise<TMock>, IVerifies, IFluentInterface
 		where TMock : class
 	{
 	}

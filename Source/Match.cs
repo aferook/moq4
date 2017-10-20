@@ -1,5 +1,5 @@
-﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -65,15 +65,19 @@ namespace Moq
 		/// <include file='Match.xdoc' path='docs/doc[@for="Match.Create{T}(condition)"]/*'/>
 		public static T Create<T>(Predicate<T> condition)
 		{
-			SetLastMatch(new Match<T>(condition));
-			return default(T);
+			return Create(new Match<T>(condition));
 		}
 
 		/// <include file='Match.xdoc' path='docs/doc[@for="Match.Create{T}(condition,renderExpression"]/*'/>
 		[SuppressMessage("Microsoft.Design", "CA1006:DoNotNestGenericTypesInMemberSignatures")]
 		public static T Create<T>(Predicate<T> condition, Expression<Func<T>> renderExpression)
 		{
-			SetLastMatch(new Match<T>(condition, renderExpression));
+			return Create(new Match<T>(condition, renderExpression));
+		}
+
+		internal static T Create<T>(Match<T> match)
+		{
+			SetLastMatch(match);
 			return default(T);
 		}
 
@@ -129,6 +133,20 @@ namespace Moq
 				return false;
 			}
 
+			var matchType = typeof(T);
+			if (value == null && matchType.GetTypeInfo().IsValueType
+				&& (!matchType.GetTypeInfo().IsGenericType || matchType.GetGenericTypeDefinition() != typeof(Nullable<>)))
+			{
+				// If this.Condition expects a value type and we've been passed null,
+				// it can't possibly match.
+				// This tends to happen when you are trying to match a parameter of type int?
+				// with IsAny<int> but then pass null into the mock.
+				// We have to return early from here because you can't cast null to T
+				// when T is a value type.
+				//
+				// See Github issue #90: https://github.com/moq/moq4/issues/90
+				return false;
+			}
 			return this.Condition((T)value);
 		}
 	}

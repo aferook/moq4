@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -61,7 +61,7 @@ namespace Moq
 			InterceptionContext = new InterceptorContext(mock, targetType, behavior);
 		}
 
-        internal InterceptorContext InterceptionContext { get; private set; }
+		internal InterceptorContext InterceptionContext { get; private set; }
 
 		internal void Verify()
 		{
@@ -75,10 +75,13 @@ namespace Moq
 
 		private void VerifyOrThrow(Func<IProxyCall, bool> match)
 		{
-			var failures = calls.Values.Where(match).ToArray();
-			if (failures.Length > 0)
+			lock (calls)
 			{
-				throw new MockVerificationException(failures);
+				var failures = calls.Values.Where(match);
+				if (failures.Any())
+				{
+					throw new MockVerificationException(failures.ToArray());
+				}
 			}
 		}
 
@@ -96,43 +99,58 @@ namespace Moq
 
 			if (!call.IsConditional)
 			{
-				// if it's not a conditional call, we do
-				// all the override setups.
-				// TODO maybe add the conditionals to other
-				// record like calls to be user friendly and display
-				// somethig like: non of this calls were performed.
-				if (calls.ContainsKey(key))
+				lock (calls)
 				{
-					// Remove previous from ordered calls
-					InterceptionContext.RemoveOrderedCall(calls[key]);
-				}
+					// if it's not a conditional call, we do
+					// all the override setups.
+					// TODO maybe add the conditionals to other
+					// record like calls to be user friendly and display
+					// somethig like: non of this calls were performed.
+					if (calls.ContainsKey(key))
+					{
+						// Remove previous from ordered calls
+						InterceptionContext.RemoveOrderedCall(calls[key]);
+					}
 
-				calls[key] = call;
+					calls[key] = call;
+				}
 			}
 
 			InterceptionContext.AddOrderedCall(call);
 		}
 
-		private IEnumerable<IInterceptStrategy> InterceptionStrategies()
+		internal void ClearCalls()
 		{
-			yield return new HandleDestructor();
-			yield return new HandleTracking();
-			yield return new InterceptMockPropertyMixin();
-			yield return new InterceptToStringMixin();
-			yield return new AddActualInvocation();
-			yield return new ExtractProxyCall();
-			yield return new ExecuteCall();
-			yield return new InvokeBase();
-			yield return new HandleMockRecursion();
+			lock (calls)
+			{
+				calls.Clear();
+			}
 		}
+
+		private static Lazy<IInterceptStrategy[]> interceptionStrategies =
+			new Lazy<IInterceptStrategy[]>(
+				() => new IInterceptStrategy[]
+				{
+					HandleDestructor.Instance,
+					HandleTracking.Instance,
+					InterceptMockPropertyMixin.Instance,
+					InterceptObjectMethodsMixin.Instance,
+					AddActualInvocation.Instance,
+					ExtractProxyCall.Instance,
+					ExecuteCall.Instance,
+					InvokeBase.Instance,
+					HandleMockRecursion.Instance,
+				});
+
+		private static IInterceptStrategy[] InterceptionStrategies => interceptionStrategies.Value;
 
 		[SuppressMessage("Microsoft.Maintainability", "CA1502:AvoidExcessiveComplexity")]
 		public void Intercept(ICallContext invocation)
 		{
-            CurrentInterceptContext localCtx = new CurrentInterceptContext();
-			foreach (var strategy in InterceptionStrategies())
+			CurrentInterceptContext localCtx = new CurrentInterceptContext();
+			foreach (var strategy in InterceptionStrategies)
 			{
-                if (InterceptionAction.Stop == strategy.HandleIntercept(invocation, InterceptionContext, localCtx))
+				if (InterceptionAction.Stop == strategy.HandleIntercept(invocation, InterceptionContext, localCtx))
 				{
 					break;
 				}
@@ -168,7 +186,9 @@ namespace Moq
 				var index = 0;
 				while (eq && index < this.values.Count)
 				{
-					eq |= this.values[index] == key.values[index];
+					// using `object.Equals` instead of == ensures that we get the correct
+					// comparison result for boxed value types:
+					eq &= object.Equals(this.values[index], key.values[index]);
 					index++;
 				}
 
@@ -183,7 +203,7 @@ namespace Moq
 				{
 					if (value != null)
 					{
-						hash ^= value.GetHashCode();
+						hash = unchecked((hash * 397) ^ value.GetHashCode());
 					}
 				}
 

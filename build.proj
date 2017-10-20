@@ -1,88 +1,121 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="4.0"
-         DefaultTargets="Build"
-         xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-    <Import Project="$(MSBuildThisFileDirectory)Common\ClariusLabs.tasks" />
+<Project ToolsVersion="4.0" DefaultTargets="Build;Test;Package" InitialTargets="Configure" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
-    <PropertyGroup>
-        <Configuration Condition="'$(Configuration)' == ''">Release</Configuration>
-        <BuildRoot>$(MSBuildThisFileDirectory)</BuildRoot>
-        <DropDirectory>$(BuildRoot)build\</DropDirectory>
-        <NuGetExe>$(BuildRoot).nuget\NuGet.exe</NuGetExe>
-        <ReleaseNotes>$([System.IO.File]::ReadAllText('$(BuildRoot)ReleaseNotes.md'))</ReleaseNotes>
-    </PropertyGroup>
+	<PropertyGroup>
+		<Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+		<IntermediateOutputPath>.nuget\</IntermediateOutputPath>
+		<PackagesPath>$(IntermediateOutputPath)packages</PackagesPath>
+		<Out Condition=" '$(Out)' == '' ">out</Out>
+		<CommonBuildProperties>WarningLevel=0;NoWarn=1591;RunCodeAnalysis=false;Configuration=$(Configuration);SourceLinkCreate=true</CommonBuildProperties>
+		<GitInfoReportImportance>high</GitInfoReportImportance>
+		<GitIgnoreTagVersion>true</GitIgnoreTagVersion>
+		<GitIgnoreBranchVersion>true</GitIgnoreBranchVersion>
+	</PropertyGroup>
 
-    <Target Name="Build" DependsOnTargets="ReplaceCurrentVersions">
-        <MakeDir Directories="$(DropDirectory)" Condition="!Exists('$(DropDirectory)')" />
-        <Delete Files="$(DropDirectory)**\*.*" ContinueOnError="false" />
+	<ItemGroup>
+		<Solution Include="Moq.sln"/>
+		<NuSpec Include="Moq.nuspec" />
+		<Source Include="Source\Moq.csproj" />
+	</ItemGroup>
+	
+	<Target Name="Clean">
+		<MSBuild Projects="@(Solution)" Properties="$(CommonBuildProperties)" Targets="Clean" />
+		<Exec Command="rmdir $(Out) /S /Q" ContinueOnError="true" />
+		<Exec Command="rmdir $(PackagesPath) /S /Q" ContinueOnError="true" />
+		<Exec Command="rmdir src\packages /S /Q" ContinueOnError="true" />
+	</Target>
 
-        <MSBuild Projects="Source\Moq.csproj"
-                 Properties="NuGet=true;TargetFrameworkVersion=v3.5;Configuration=$(Configuration)"
-                 Targets="Rebuild" />
-        <Exec Command="xcopy &quot;Source\bin\Release\Moq.*&quot; &quot;$(DropDirectory)lib\net35\&quot; /Y" ContinueOnError="false" />
+	<Target Name="Rebuild" DependsOnTargets="Clean;Build" />
+	
+	<Target Name="Build" DependsOnTargets="GitVersion">
+		<MSBuild Projects="@(Solution)" Properties="$(CommonBuildProperties)" />
 
-        <MSBuild Projects="Source\Moq.csproj"
-                 Properties="NuGet=true;TargetFrameworkVersion=v4.0;Configuration=$(Configuration)"
-                 Targets="Rebuild" />
-        <Exec Command="xcopy &quot;Source\bin\Release\Moq.*&quot; &quot;$(DropDirectory)lib\net40\&quot; /Y" ContinueOnError="false" />
+		<Exec Command="xcopy &quot;Source\bin\$(Configuration)\net45\Moq.*&quot; &quot;$(DropDirectory)lib\net45\&quot; /Y" ContinueOnError="false" />
+		<Exec Command="xcopy &quot;Source\bin\$(Configuration)\netstandard1.3\Moq.*&quot; &quot;$(DropDirectory)lib\netstandard1.3\&quot; /Y" ContinueOnError="false" />
+	</Target>
 
-        <MSBuild Projects="Source.Silverlight\Moq.Silverlight.csproj"
-                 Properties="Configuration=$(Configuration)"
-                 Targets="Rebuild" />
-        <Exec Command="xcopy &quot;Source.Silverlight\bin\Release\Moq.*&quot; &quot;$(DropDirectory)lib\sl4\&quot; /Y" ContinueOnError="false" />
+	<Target Name="Test" DependsOnTargets="Build">
 
-        <Copy SourceFiles="Moq.nuspec" DestinationFolder="$(DropDirectory)" />
-        <!-- Copy source for symbolsource integration -->
-        <ItemGroup>
-            <SymbolSource Include="Source\**\*.cs" />
-        </ItemGroup>
-        <Copy SourceFiles="@(SymbolSource)" DestinationFiles="@(SymbolSource->'$(DropDirectory)src\%(RecursiveDir)%(Filename)%(Extension)')" ContinueOnError="false" SkipUnchangedFiles="true" OverwriteReadOnlyFiles="true" />
+		<!-- See if dotnet CLI is available: -->
+		<Exec ContinueOnError="True" Command="dotnet --info">
+			<Output TaskParameter="ExitCode" PropertyName="DotNetErrorCode"/>
+		</Exec>
+		<Warning Condition="'$(DotNetErrorCode)' != '0'" Text="Error in executing dotnet." />
 
-        <!-- Finally build the package -->
-        <Exec Command="$(NuGetExe) pack -NoPackageAnalysis $(DropDirectory)Moq.nuspec -Symbols -OutputDirectory $(DropDirectory) -Version $(PackageVersion)"
-              ContinueOnError="false" />
-    </Target>
+		<!-- Test runner report files will be written to the `out\` directory,
+		     so create it if it doesn't exist yet. -->
+		<MakeDir Directories="$(Out)" Condition=" !Exists('$(Out)') " />
 
-    <Target Name="ReplaceCurrentVersions">
-        <ReadAssemblyVersion File="Source\Properties\AssemblyInfo.cs">
-            <Output PropertyName="Major"
-                    TaskParameter="Major"/>
-            <Output PropertyName="Minor"
-                    TaskParameter="Minor"/>
-        </ReadAssemblyVersion>
+		<Exec Command="dotnet xunit -nobuild -configuration $(Configuration) -noshadow -appveyor -html ..\$(Out)\test.html -xml ..\$(Out)\test.xml"
+		      WorkingDirectory="UnitTests"
+			  ContinueOnError="false" />
 
-        <PropertyGroup Condition="'$(FileVersion)' == ''">
-            <!-- Build number is of the format (2 digit year)(2 digit month) -->
-            <Build>$([System.DateTime]::UtcNow.ToString("yyMM"))</Build>
-            <!-- Revision number is of the format (2 digit hour)(2 digit minutes) -->
-            <Revision>$([System.DateTime]::UtcNow.ToString("ddHH"))</Revision>
-            <FileVersion>$(Major).$(Minor).$(Build).$(Revision)</FileVersion>
-            <!-- TODO: maybe we should have two builds, one that builds the public simplified version
-                 and one with the full build/revision -->
-        </PropertyGroup>
-    
-        <PropertyGroup>
-            <PackageVersion>$(FileVersion)</PackageVersion>
-        </PropertyGroup>
+		<PropertyGroup>
+			<CoverageConsole>$(PackagesPath)\OpenCover\tools\OpenCover.Console.exe</CoverageConsole>
+			<CoverageOptions>$(CoverageOptions) -output:$(Out)\coverage.xml -returntargetcode -register:user -filter:"+[Moq.*]* -[xunit*]* -[*.Tests]* -[*]*ThisAssembly* -[*]*IFluentInterface*" -excludebyattribute:*ExcludeFromCodeCoverage*;*CompilerGenerated* -skipautoprops -showunvisited -mergebyhash -hideskipped:All</CoverageOptions>
+		</PropertyGroup>
 
-        <ItemGroup>
-            <_VersionRegexTransform Include="Source\Properties\AssemblyInfo.cs">
-                <Find>AssemblyFileVersion\(".*?"\)</Find>
-                <ReplaceWith>AssemblyFileVersion("$(FileVersion)")</ReplaceWith>
-            </_VersionRegexTransform>
-            <_VersionRegexTransform Include="Source\Properties\AssemblyInfo.cs">
-                <Find>AssemblyVersion\(".*?"\)</Find>
-                <ReplaceWith>AssemblyVersion("$(FileVersion)")</ReplaceWith>
-            </_VersionRegexTransform>
-            <_VersionRegexTransform Include="$(BuildRoot)**\*.nuspec"
-                            Condition="'$(ReleaseNotes)' != ''">
-                <Find><![CDATA[<releaseNotes />|<releaseNotes/>|<releaseNotes>.*</releaseNotes>]]></Find>
-                <ReplaceWith><![CDATA[<releaseNotes>$(ReleaseNotes)</releaseNotes>]]></ReplaceWith>
-                <Options>Singleline</Options>
-            </_VersionRegexTransform>
-        </ItemGroup>
+		<!-- This isn't collecting any data right now, so make Coverage == '' by default so it won't run with this condition -->
+		<Exec Command="$(CoverageConsole) $(CoverageOptions) -target:$(XunitConsole) -targetargs:&quot;@(TestAssembly, ' ') $(XunitOptions)&quot;"
+		      Condition=" '$(Coverage)' == 'true' "
+		      ConsoleToMSBuild="true"
+		      ContinueOnError="ErrorAndContinue" />
+	</Target>
 
-        <RegexTransform Items="@(_VersionRegexTransform)" />
-    </Target>
+	<Target Name="Package" DependsOnTargets="Build">
+		<MakeDir Directories="$(Out)" Condition=" !Exists('$(Out)') " />
+		<Exec Command='"$(NuGet)" Pack "%(NuSpec.Identity)" $(Args) -Version $(Version) -Properties Id=%(NuSpec.Filename);Configuration=$(Configuration);Version=$(Version) -OutputDirectory $(Out)' />
 
+		<!-- See if dotnet CLI is available: -->
+		<Exec ContinueOnError="True" Command="dotnet --info">
+			<Output TaskParameter="ExitCode" PropertyName="DotNetErrorCode"/>
+		</Exec>
+		<Warning Condition="'$(DotNetErrorCode)' != '0'" Text="Error in executing dotnet." />
+
+		<!-- Verify that created NuGet package is correctly source-linked to the GitHub repository -->
+		<!--
+		<Exec Command="dotnet sourcelink test ..\$(Out)\%(NuSpec.Filename).$(Version).nupkg"
+		      WorkingDirectory="Source"
+		      ContinueOnError="false" />
+		-->
+	</Target>
+
+	<Target Name="Publish" DependsOnTargets="Package">
+		<Exec Command='$(NuGet) Push "$(Out)\%(NuSpec.Filename).$(Version).nupkg" $(NuGetPushArgs)'
+		      StandardErrorImportance="high"
+		      StandardOutputImportance="normal" />
+
+		<Message Text="Published new package: Id=%(NuSpec.Filename), Version=$(Version)"
+				 Importance="high" />
+	</Target>
+
+	<!-- Configure and restore initial targets and packages -->
+	<Import Project="NuGet.Restore.targets" />
+	<PropertyGroup>
+		<GitInfoTargets>$(PackagesPath)\GitInfo\build\GitInfo.targets</GitInfoTargets>
+		<PendingRestore Condition=" !Exists('$(GitInfoTargets)') ">true</PendingRestore>
+	</PropertyGroup>
+
+	<Target Name="GitVersion" /><!-- Gets overriden by the $(GitInfoTargets) if it exists -->
+	<Import Project="$(GitInfoTargets)" Condition=" Exists('$(GitInfoTargets)') " />
+
+	<Target Name="Configure" DependsOnTargets="_GetNuGet;GitInfoReport">
+		<!-- We always run NuGet Install since it already checks for already-installed packages and skips them -->
+		<Exec Command='"$(NuGet)" Install "$(MSBuildThisFileDirectory)packages.config" -OutputDirectory "$(PackagesPath)" -ExcludeVersion' />
+
+		<!-- Errors if nuget packages were restored during the build -->
+		<Error Text="Required build-time NuGet packages were missing and were just restored. Please run the build again."
+		       Condition=" '$(PendingRestore)' == 'true' And '$(target)' != 'configure' "/>
+
+		<PropertyGroup>
+			<Version>$(GitSemVerMajor).$(GitSemVerMinor).$(GitSemVerPatch)$(GitSemVerDashLabel)</Version>
+		</PropertyGroup>
+
+		<!-- Update AppVeyor build # to match the actual one being used -->
+		<Exec Command="appveyor UpdateBuild -Version $(Version)" Condition=" '$(APPVEYOR)' == 'true' "
+		      ConsoleToMSBuild="true"
+		      ContinueOnError="WarnAndContinue" />
+
+		<MakeDir Directories="$(Out)" Condition=" !Exists('$(Out)') " />
+	</Target>
 </Project>

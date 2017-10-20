@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -43,7 +43,12 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
+#if FEATURE_CAS
 using System.Security.Permissions;
+#endif
+#if FEATURE_COM
+using System.Runtime.InteropServices;
+#endif
 using Castle.DynamicProxy;
 using Castle.DynamicProxy.Generators;
 using Moq.Properties;
@@ -51,34 +56,40 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace Moq.Proxy
 {
-	internal class CastleProxyFactory : IProxyFactory
+	internal sealed class CastleProxyFactory : IProxyFactory
 	{
+		public static CastleProxyFactory Instance { get; } = new CastleProxyFactory();
+
 		private static readonly ProxyGenerator generator = CreateProxyGenerator();
 
 		[SuppressMessage("Microsoft.Performance", "CA1810:InitializeReferenceTypeStaticFieldsInline", Justification = "By Design")]
 		static CastleProxyFactory()
 		{
-#pragma warning disable 618
+#if FEATURE_CAS
 			AttributesToAvoidReplicating.Add<SecurityPermissionAttribute>();
-#pragma warning restore 618
-
-#if !SILVERLIGHT
 			AttributesToAvoidReplicating.Add<ReflectionPermissionAttribute>();
 			AttributesToAvoidReplicating.Add<PermissionSetAttribute>();
-			AttributesToAvoidReplicating.Add<System.Runtime.InteropServices.MarshalAsAttribute>();
 			AttributesToAvoidReplicating.Add<UIPermissionAttribute>();
-#if !NET3x
-			AttributesToAvoidReplicating.Add<System.Runtime.InteropServices.TypeIdentifierAttribute>();
 #endif
+
+#if FEATURE_COM
+			AttributesToAvoidReplicating.Add<MarshalAsAttribute>();
+			AttributesToAvoidReplicating.Add<TypeIdentifierAttribute>();
 #endif
-			proxyOptions = new ProxyGenerationOptions { Hook = new ProxyMethodHook(), BaseTypeForInterfaceProxy = typeof(InterfaceProxy) };
+
+			proxyOptions = new ProxyGenerationOptions { Hook = new IncludeObjectMethodsHook() };
 		}
 
 		/// <inheritdoc />
 		public object CreateProxy(Type mockType, ICallInterceptor interceptor, Type[] interfaces, object[] arguments)
 		{
-			if (mockType.IsInterface) {
-				return generator.CreateInterfaceProxyWithoutTarget(mockType, interfaces, proxyOptions, new Interceptor(interceptor));
+			if (mockType.GetTypeInfo().IsInterface)
+			{
+				// Add type to additional interfaces and mock System.Object instead.
+				// This way it is also possible to mock System.Object methods.
+				Array.Resize(ref interfaces, interfaces.Length + 1);
+				interfaces[interfaces.Length - 1] = mockType;
+				mockType = typeof(object);
 			}
 
 			try
@@ -95,6 +106,11 @@ namespace Moq.Proxy
 			}
 		}
 
+		public bool IsMethodVisible(MethodInfo method, out string messageIfNotVisible)
+		{
+			return ProxyUtil.IsAccessible(method, out messageIfNotVisible);
+		}
+
 		private static readonly Dictionary<Type, Type> delegateInterfaceCache = new Dictionary<Type, Type>();
 		private static readonly ProxyGenerationOptions proxyOptions;
 		private static int delegateInterfaceSuffix;
@@ -107,7 +123,7 @@ namespace Moq.Proxy
 			lock (this)
 			{
 				if (!delegateInterfaceCache.TryGetValue(delegateType, out delegateInterfaceType))
- 				{
+				{
 					var interfaceName = String.Format(CultureInfo.InvariantCulture, "DelegateInterface_{0}_{1}",
 					                                  delegateType.Name, delegateInterfaceSuffix++);
 
@@ -120,15 +136,20 @@ namespace Moq.Proxy
 					var delegateParameterTypes = invokeMethodOnDelegate.GetParameters().Select(p => p.ParameterType).ToArray();
 
 					// Create a method on the interface with the same signature as the delegate.
-					newTypeBuilder.DefineMethod("Invoke",
-					                            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Abstract,
-					                            CallingConventions.HasThis,
-					                            invokeMethodOnDelegate.ReturnType, delegateParameterTypes);
+					var newMethBuilder = newTypeBuilder.DefineMethod("Invoke",
+					                                                 MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Abstract,
+					                                                 CallingConventions.HasThis,
+					                                                 invokeMethodOnDelegate.ReturnType, delegateParameterTypes);
 
-					delegateInterfaceType = newTypeBuilder.CreateType();
+					foreach (var param in invokeMethodOnDelegate.GetParameters())
+					{
+						newMethBuilder.DefineParameter(param.Position + 1, param.Attributes, param.Name);
+					}
+
+					delegateInterfaceType = newTypeBuilder.CreateTypeInfo().AsType();
 					delegateInterfaceCache[delegateType] = delegateInterfaceType;
- 				}
- 			}
+				}
+			}
 
 			delegateInterfaceMethod = delegateInterfaceType.GetMethod("Invoke");
 			return delegateInterfaceType;
@@ -187,6 +208,26 @@ namespace Moq.Proxy
 			public void SetArgumentValue(int index, object value)
 			{
 				this.invocation.SetArgumentValue(index, value);
+			}
+		}
+
+		/// <summary>
+		/// This hook tells Castle DynamicProxy to proxy the default methods it suggests,
+		/// plus some of the methods defined by <see cref="object"/>, e.g. so we can intercept
+		/// <see cref="object.ToString()"/> and give mocks useful default names.
+		/// </summary>
+		private sealed class IncludeObjectMethodsHook : AllMethodsHook
+		{
+			public override bool ShouldInterceptMethod(Type type, MethodInfo method)
+			{
+				return base.ShouldInterceptMethod(type, method) || IsRelevantObjectMethod(method);
+			}
+
+			private static bool IsRelevantObjectMethod(MethodInfo method)
+			{
+				return method.DeclaringType == typeof(object) && (method.Name == nameof(object.ToString)
+				                                              ||  method.Name == nameof(object.Equals)
+				                                              ||  method.Name == nameof(object.GetHashCode));
 			}
 		}
 	}

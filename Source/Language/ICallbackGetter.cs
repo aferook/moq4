@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -51,7 +51,7 @@ namespace Moq.Language
 	/// <typeparam name="TMock">Mocked type.</typeparam>
 	/// <typeparam name="TProperty">Type of the property.</typeparam>
 	[EditorBrowsable(EditorBrowsableState.Never)]
-	public interface ICallbackGetter<TMock, TProperty> : IHideObjectMembers
+	public interface ICallbackGetter<TMock, TProperty> : IFluentInterface
 		where TMock : class
 	{ 
 		/// <summary>

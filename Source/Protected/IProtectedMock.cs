@@ -1,5 +1,5 @@
 ﻿//Copyright (c) 2007. Clarius Consulting, Manas Technology Solutions, InSTEDD
-//http://code.google.com/p/moq/
+//https://github.com/moq/moq4
 //All rights reserved.
 
 //Redistribution and use in source and binary forms, 
@@ -48,7 +48,7 @@ namespace Moq.Protected
 	/// name as a string, rather than strong-typing them which is not possible 
 	/// due to their visibility.
 	/// </summary>
-	public interface IProtectedMock<TMock> : IHideObjectMembers
+	public interface IProtectedMock<TMock> : IFluentInterface
 		where TMock : class
 	{
 		#region Setup
@@ -71,6 +71,17 @@ namespace Moq.Protected
 		/// remember to use <see cref="ItExpr"/> rather than <see cref="It"/>.</param>
 		/// <typeparam name="TResult">The return type of the method or property.</typeparam>
 		ISetup<TMock, TResult> Setup<TResult>(string methodOrPropertyName, params object[] args);
+
+		/// <summary>
+		/// Specifies a setup for an invocation on a property or a non void method with the given 
+		/// <paramref name="methodOrPropertyName"/>, optionally specifying arguments for the method call.
+		/// </summary>
+		/// <param name="methodOrPropertyName">The name of the method or property to be invoked.</param>
+		/// <param name="args">The optional arguments for the invocation. If argument matchers are used, 
+		/// remember to use <see cref="ItExpr"/> rather than <see cref="It"/>.</param>
+		/// <param name="exactParameterMatch">Should the parameter types match exactly types that were provided</param>
+		/// <typeparam name="TResult">The return type of the method or property.</typeparam>
+		ISetup<TMock, TResult> Setup<TResult>(string methodOrPropertyName, bool exactParameterMatch, params object[] args);
 
 		/// <summary>
 		/// Specifies a setup for an invocation on a property getter with the given 
@@ -96,7 +107,7 @@ namespace Moq.Protected
 
 		/// <summary>
 		/// Specifies a verify for a void method with the given <paramref name="methodName"/>,
-		/// optionally specifying arguments for the method call. Use in conjuntion with the default
+		/// optionally specifying arguments for the method call. Use in conjunction with the default
 		/// <see cref="MockBehavior.Loose"/>.
 		/// </summary>
 		/// <exception cref="MockException">The invocation was not call the times specified by
